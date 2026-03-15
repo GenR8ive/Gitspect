@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import Table from 'cli-table3';
-import { FileChurn, ActivityPattern, RepoSummary, ReflectOutput, ChurnLevel } from '../types.js';
+import { FileChurn, ActivityPattern, RepoSummary, ReflectOutput, ChurnLevel, FileOwnership, FileRisk, FileCoupling } from '../types.js';
 
 /**
  * Format a date range as a readable string
@@ -263,4 +263,152 @@ export function formatChurnTable(files: FileChurn[], days: number | undefined): 
  */
 export function formatJSON(data: unknown): string {
   return JSON.stringify(data, null, 2);
+}
+
+/**
+ * Get risk level emoji
+ */
+function getRiskEmoji(level: string): string {
+  switch (level) {
+    case 'CRITICAL':
+      return '🔴';
+    case 'HIGH':
+      return '🟠';
+    case 'MEDIUM':
+      return '🟡';
+    case 'LOW':
+      return '🟢';
+    default:
+      return '•';
+  }
+}
+
+/**
+ * Get coupling strength emoji
+ */
+function getCouplingEmoji(strength: string): string {
+  switch (strength) {
+    case 'STRONG':
+      return '🔗';
+    case 'MODERATE':
+      return '📎';
+    case 'WEAK':
+      return '•';
+    default:
+      return '•';
+  }
+}
+
+/**
+ * Format blame map output
+ */
+export function formatBlameMap(ownerships: FileOwnership[], days?: number): string {
+  const lines: string[] = [];
+
+  lines.push(chalk.bold(`\nFile Ownership Map (${formatDateRange(days)})\n`));
+
+  if (ownerships.length === 0) {
+    lines.push(chalk.gray('No file ownership data available.'));
+    return lines.join('\n');
+  }
+
+  const table = new Table({
+    head: ['File', 'Owner', 'Commits', 'Ownership'],
+    colAligns: ['left', 'left', 'right', 'right'],
+    style: {
+      head: [],
+      border: ['gray'],
+    },
+  });
+
+  for (const ownership of ownerships) {
+    const fileName = ownership.path.length > 35 ? ownership.path.substring(0, 32) + '...' : ownership.path;
+    table.push([
+      fileName,
+      ownership.primaryAuthor,
+      ownership.totalCommits.toString(),
+      `${ownership.ownershipPercentage}%`,
+    ]);
+  }
+
+  lines.push(table.toString());
+
+  return lines.join('\n');
+}
+
+/**
+ * Format scars output
+ */
+export function formatScars(risks: FileRisk[], days?: number): string {
+  const lines: string[] = [];
+
+  lines.push(chalk.bold(`\n⚠️  Riskiest Files (${formatDateRange(days)})\n`));
+
+  if (risks.length === 0) {
+    lines.push(chalk.gray('No file risk data available.'));
+    return lines.join('\n');
+  }
+
+  const table = new Table({
+    head: ['File', 'Risk', 'Churn', 'Bugfix', 'Authors'],
+    colAligns: ['left', 'center', 'right', 'right', 'right'],
+    style: {
+      head: [],
+      border: ['gray'],
+    },
+  });
+
+  for (const risk of risks) {
+    const fileName = risk.path.length > 30 ? risk.path.substring(0, 27) + '...' : risk.path;
+    table.push([
+      fileName,
+      `${getRiskEmoji(risk.riskLevel)} ${risk.riskScore}`,
+      risk.factors.churn.toString(),
+      (risk.factors.bugfixRate * 100).toFixed(0) + '%',
+      risk.factors.authorCount.toString(),
+    ]);
+  }
+
+  lines.push(table.toString());
+  lines.push(chalk.gray("\nRisk factors: churn (40%), bugfix rate (30%), reverts (20%), complexity (10%)"));
+
+  return lines.join('\n');
+}
+
+/**
+ * Format couples output
+ */
+export function formatCouples(couplings: FileCoupling[], days?: number): string {
+  const lines: string[] = [];
+
+  lines.push(chalk.bold(`\nFile Coupling Analysis (${formatDateRange(days)})\n`));
+
+  if (couplings.length === 0) {
+    lines.push(chalk.gray('No file coupling data available.'));
+    return lines.join('\n');
+  }
+
+  const table = new Table({
+    head: ['File 1', 'File 2', 'Strength', 'Count'],
+    colAligns: ['left', 'left', 'center', 'right'],
+    style: {
+      head: [],
+      border: ['gray'],
+    },
+  });
+
+  for (const coupling of couplings) {
+    const file1Name = coupling.file1.length > 30 ? coupling.file1.substring(0, 27) + '...' : coupling.file1;
+    const file2Name = coupling.file2.length > 30 ? coupling.file2.substring(0, 27) + '...' : coupling.file2;
+    table.push([
+      file1Name,
+      file2Name,
+      `${getCouplingEmoji(coupling.couplingStrength)} ${coupling.couplingStrength}`,
+      coupling.couplingCount.toString(),
+    ]);
+  }
+
+  lines.push(table.toString());
+
+  return lines.join('\n');
 }

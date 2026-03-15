@@ -111,3 +111,47 @@ export interface ReflectOutput {
 export interface ChurnOptions extends BaseOptions {
   limit?: number;
 }
+
+/**
+ * File ownership metrics
+ */
+export interface FileOwnership {
+  path: string;
+  primaryAuthor: string;
+  authorCommits: Map<string, number>; // author -> commit count
+  totalCommits: number;
+  ownershipPercentage: number; // primary author's share
+}
+
+/**
+ * File risk assessment (for scars command)
+ */
+export interface FileRisk {
+  path: string;
+  riskScore: number; // 0-100
+  riskLevel: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  factors: {
+    churn: number; // commit count
+    bugfixRate: number; // bugfix commits / total commits
+    revertCount: number;
+    authorCount: number; // many authors = complexity
+  };
+  lastModified: Date;
+}
+
+/**
+ * File coupling (files changed together)
+ */
+export interface FileCoupling {
+  file1: string;
+  file2: string;
+  couplingCount: number; // times changed together
+  couplingStrength: 'STRONG' | 'MODERATE' | 'WEAK';
+}
+
+/**
+ * Scars and couples command options with limit
+ */
+export interface LimitedOptions extends BaseOptions {
+  limit?: number;
+}

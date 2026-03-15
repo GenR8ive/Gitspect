@@ -1,4 +1,4 @@
-import { Commit, FileMetrics, FileChurn, ChurnLevel, ActivityPattern, ActivitySlot, RepoSummary } from '../types.js';
+import { Commit, FileMetrics, FileChurn, ChurnLevel, ActivityPattern, ActivitySlot, RepoSummary, FileOwnership, FileRisk, FileCoupling } from '../types.js';
 
 /**
  * Patterns that indicate a bugfix commit
@@ -224,4 +224,207 @@ function calculateChurnLevel(metrics: FileMetrics): ChurnLevel {
   }
 
   return ChurnLevel.LOW;
+}
+
+/**
+ * Calculate file ownership from commits
+ */
+export function calculateFileOwnership(commits: Commit[]): FileOwnership[] {
+  const fileMap = new Map<string, Map<string, number>>();
+
+  // Build file -> author -> commit count mapping
+  for (const commit of commits) {
+    for (const filePath of commit.files) {
+      if (!fileMap.has(filePath)) {
+        fileMap.set(filePath, new Map());
+      }
+      const authorMap = fileMap.get(filePath)!;
+      const currentCount = authorMap.get(commit.author) || 0;
+      authorMap.set(commit.author, currentCount + 1);
+    }
+  }
+
+  // Convert to FileOwnership array
+  const ownerships: FileOwnership[] = [];
+  for (const [path, authorMap] of fileMap.entries()) {
+    // Find primary author (most commits)
+    let maxCommits = 0;
+    let primaryAuthor = '';
+    let totalCommits = 0;
+
+    for (const [author, count] of authorMap.entries()) {
+      totalCommits += count;
+      if (count > maxCommits) {
+        maxCommits = count;
+        primaryAuthor = author;
+      }
+    }
+
+    ownerships.push({
+      path,
+      primaryAuthor,
+      authorCommits: authorMap,
+      totalCommits,
+      ownershipPercentage: Math.round((maxCommits / totalCommits) * 100),
+    });
+  }
+
+  // Sort by commit count descending
+  return ownerships.sort((a, b) => b.totalCommits - a.totalCommits);
+}
+
+/**
+ * Calculate file risk scores from commits
+ */
+export function calculateFileRisk(commits: Commit[]): FileRisk[] {
+  const fileMap = new Map<string, FileMetrics>();
+
+  // Build file metrics (reuse existing logic)
+  for (const commit of commits) {
+    for (const filePath of commit.files) {
+      if (!fileMap.has(filePath)) {
+        fileMap.set(filePath, {
+          path: filePath,
+          commitCount: 0,
+          bugfixCount: 0,
+          revertCount: 0,
+          authors: [],
+          lastModified: new Date(0),
+          totalInsertions: 0,
+          totalDeletions: 0,
+        });
+      }
+
+      const metrics = fileMap.get(filePath)!;
+      metrics.commitCount++;
+      metrics.totalInsertions += commit.insertions;
+      metrics.totalDeletions += commit.deletions;
+
+      if (!metrics.authors.includes(commit.author)) {
+        metrics.authors.push(commit.author);
+      }
+
+      if (commit.date > metrics.lastModified) {
+        metrics.lastModified = commit.date;
+      }
+
+      if (isBugfixCommit(commit)) {
+        metrics.bugfixCount++;
+      }
+
+      if (isRevertCommit(commit)) {
+        metrics.revertCount++;
+      }
+    }
+  }
+
+  // Calculate risk scores
+  const risks: FileRisk[] = [];
+  for (const metrics of fileMap.values()) {
+    const riskScore = calculateRiskScore(metrics);
+    risks.push({
+      path: metrics.path,
+      riskScore,
+      riskLevel: getRiskLevel(riskScore),
+      factors: {
+        churn: metrics.commitCount,
+        bugfixRate: metrics.commitCount > 0 ? metrics.bugfixCount / metrics.commitCount : 0,
+        revertCount: metrics.revertCount,
+        authorCount: metrics.authors.length,
+      },
+      lastModified: metrics.lastModified,
+    });
+  }
+
+  // Sort by risk score descending
+  return risks.sort((a, b) => b.riskScore - a.riskScore);
+}
+
+/**
+ * Calculate risk score (0-100) based on file metrics
+ */
+function calculateRiskScore(metrics: FileMetrics): number {
+  let score = 0;
+
+  // Churn factor: 0-40 points
+  // More commits = higher churn risk
+  const churnScore = Math.min(metrics.commitCount * 2, 40);
+  score += churnScore;
+
+  // Bugfix factor: 0-30 points
+  // Higher bugfix rate = more problematic
+  const bugfixRate = metrics.commitCount > 0 ? metrics.bugfixCount / metrics.commitCount : 0;
+  const bugfixScore = Math.min(bugfixRate * 100, 30);
+  score += bugfixScore;
+
+  // Revert factor: 0-20 points
+  // More reverts = more instability
+  const revertScore = Math.min(metrics.revertCount * 10, 20);
+  score += revertScore;
+
+  // Complexity factor: 0-10 points
+  // More authors = more complexity
+  const authorScore = Math.min(metrics.authors.length * 2, 10);
+  score += authorScore;
+
+  return Math.min(score, 100);
+}
+
+/**
+ * Get risk level from score
+ */
+function getRiskLevel(score: number): 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' {
+  if (score >= 70) return 'CRITICAL';
+  if (score >= 50) return 'HIGH';
+  if (score >= 30) return 'MEDIUM';
+  return 'LOW';
+}
+
+/**
+ * Calculate file coupling (files changed together)
+ */
+export function calculateFileCoupling(commits: Commit[]): FileCoupling[] {
+  const couplingMap = new Map<string, number>();
+
+  // Track file pairs changed together
+  for (const commit of commits) {
+    const files = commit.files;
+    if (files.length < 2) continue;
+
+    // Generate all pairs
+    for (let i = 0; i < files.length; i++) {
+      for (let j = i + 1; j < files.length; j++) {
+        // Create a canonical key (alphabetically sorted)
+        const [file1, file2] = [files[i], files[j]].sort();
+        const key = `${file1}|${file2}`;
+
+        const currentCount = couplingMap.get(key) || 0;
+        couplingMap.set(key, currentCount + 1);
+      }
+    }
+  }
+
+  // Convert to FileCoupling array
+  const couplings: FileCoupling[] = [];
+  for (const [key, count] of couplingMap.entries()) {
+    const [file1, file2] = key.split('|');
+    couplings.push({
+      file1,
+      file2,
+      couplingCount: count,
+      couplingStrength: getCouplingStrength(count),
+    });
+  }
+
+  // Sort by coupling count descending
+  return couplings.sort((a, b) => b.couplingCount - a.couplingCount);
+}
+
+/**
+ * Get coupling strength from count
+ */
+function getCouplingStrength(count: number): 'STRONG' | 'MODERATE' | 'WEAK' {
+  if (count >= 5) return 'STRONG';
+  if (count >= 3) return 'MODERATE';
+  return 'WEAK';
 }

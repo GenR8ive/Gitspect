@@ -51,29 +51,45 @@ LLMs provide narrative interpretation of metrics:
 - "High night activity → potential burnout risk"
 - Natural language summaries and suggestions
 
-## Planned CLI Interface
+## CLI Interface
+
+### Phase 1: Implemented (MVP)
 
 ```bash
-# Phase 1: Solo dev retrospectives (MVP)
-gitspect reflect              # Personal retrospective (last 30 days)
-gitspect churn                # File churn detection
-gitspect heatmap              # Activity patterns by time
+# Personal retrospective - analyze recent development activity
+gitspect reflect [--days <number>] [--current-branch] [--json]
 
-# Phase 2: Contributor onboarding
+# File churn detection - identify frequently modified files
+gitspect churn [--days <number>] [--limit <number>] [--current-branch] [--json]
+
+# Activity heatmap - visualize when you code most
+gitspect heatmap [--days <number>] [--current-branch] [--json]
+```
+
+**Branch behavior**:
+- Default: Analyzes **all branches** (complete picture across feature branches, experiments, etc.)
+- `--current-branch`: Only analyze the currently checked-out branch
+
+### Phase 2: Contributor onboarding (Planned)
+```bash
 gitspect blame-map            # File ownership mapping
 gitspect scars                # Riskiest files to modify
 gitspect couples              # Files changed together
+```
 
-# Phase 3: PM narratives
+### Phase 3: PM narratives (Planned)
+```bash
 gitspect report               # Human-readable project summary
 gitspect blockers             # What's slowing progress
+```
 
-# Phase 4: AI assistant integration
+### Phase 4: AI assistant integration (Planned)
+```bash
 gitspect suggest              # Generate .cursorrules, agent prompts
 gitspect explain <file>       # Context for AI assistants
 ```
 
-### LLM Flags
+### LLM Flags (Planned)
 
 ```bash
 gitspect reflect                    # Pure offline analysis
@@ -101,11 +117,13 @@ Example:
 
 ## Development Notes
 
-- Early development stage - no build/test commands yet
-- Target distribution: npm package (CLI), possibly cargo later
-- Language: TypeScript for npm distribution
-- Core dependencies: git parsing libraries (simple-git or isomorphic-git)
-- LLM integration: Support for Ollama (local), user-provided API keys
+- **Build**: `npm run build` - Compiles TypeScript to `dist/`
+- **Dev**: `npm run dev -- <command>` - Run CLI directly with tsx
+- **Install**: `npm link` - Symlink for global testing
+- Target distribution: npm package (CLI)
+- Language: TypeScript with ES2022 modules
+- Core dependencies: simple-git (git operations), commander (CLI), chalk (colors), cli-table3 (tables)
+- LLM integration: Planned for future phases
 
 ## References
 

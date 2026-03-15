@@ -12,14 +12,22 @@ export class GitParser {
   }
 
   /**
-   * Get all commits since a specific date
+   * Get all commits since a specific date (or all commits if since is undefined)
    */
-  async getCommits(since: Date): Promise<Commit[]> {
-    const sinceDate = since.toISOString();
-    const log = await this.git.log({
-      from: sinceDate,
-      strictDate: true,
-    });
+  async getCommits(since?: Date, currentBranchOnly = false): Promise<Commit[]> {
+    const options: Record<string, unknown> = {};
+
+    // Only add --since filter if a date is provided
+    if (since) {
+      options['--since'] = since.toISOString();
+    }
+
+    // Include all branches by default, unless current branch only is requested
+    if (!currentBranchOnly) {
+      options['--all'] = true;
+    }
+
+    const log = await this.git.log(options);
 
     // Get detailed stats for each commit
     const commits: Commit[] = [];
@@ -48,11 +56,9 @@ export class GitParser {
    * Get commits for a specific file
    */
   async getFileHistory(filePath: string, since: Date): Promise<Commit[]> {
-    const sinceDate = since.toISOString();
     const log = await this.git.log({
-      from: sinceDate,
-      file: filePath,
-      strictDate: true,
+      '--since': since.toISOString(),
+      '--': filePath,
     });
 
     const commits: Commit[] = [];

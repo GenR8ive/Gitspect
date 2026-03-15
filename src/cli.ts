@@ -15,33 +15,36 @@ program
 program
   .command('reflect')
   .description('Personal retrospective - analyze your recent development activity')
-  .option('--days <number>', 'Time period in days', '30')
+  .option('--days <number>', 'Time period in days (default: all time)')
+  .option('--current-branch', 'Only analyze the current branch (default: all branches)')
   .option('--json', 'Output as JSON')
   .action(async (options) => {
-    const days = parseInt(options.days, 10);
-    await reflectCommand({ days, json: options.json });
+    const days = options.days ? parseInt(options.days, 10) : undefined;
+    await reflectCommand({ days, currentBranch: options.currentBranch, json: options.json });
   });
 
 program
   .command('churn')
   .description('File churn detection - identify frequently modified files')
-  .option('--days <number>', 'Time period in days', '30')
+  .option('--days <number>', 'Time period in days (default: all time)')
   .option('--limit <number>', 'Maximum number of files to display')
+  .option('--current-branch', 'Only analyze the current branch (default: all branches)')
   .option('--json', 'Output as JSON')
   .action(async (options) => {
-    const days = parseInt(options.days, 10);
+    const days = options.days ? parseInt(options.days, 10) : undefined;
     const limit = options.limit ? parseInt(options.limit, 10) : undefined;
-    await churnCommand({ days, limit, json: options.json });
+    await churnCommand({ days, limit, currentBranch: options.currentBranch, json: options.json });
   });
 
 program
   .command('heatmap')
   .description('Activity heatmap - visualize when you code most')
-  .option('--days <number>', 'Time period in days', '30')
+  .option('--days <number>', 'Time period in days (default: all time)')
+  .option('--current-branch', 'Only analyze the current branch (default: all branches)')
   .option('--json', 'Output as JSON')
   .action(async (options) => {
-    const days = parseInt(options.days, 10);
-    await heatmapCommand({ days, json: options.json });
+    const days = options.days ? parseInt(options.days, 10) : undefined;
+    await heatmapCommand({ days, currentBranch: options.currentBranch, json: options.json });
   });
 
 program.parseAsync().catch((error) => {

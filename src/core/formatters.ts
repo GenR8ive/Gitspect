@@ -5,8 +5,8 @@ import { FileChurn, ActivityPattern, RepoSummary, ReflectOutput, ChurnLevel } fr
 /**
  * Format a date range as a readable string
  */
-function formatDateRange(days: number): string {
-  return `Last ${days} days`;
+function formatDateRange(days: number | undefined): string {
+  return days ? `Last ${days} days` : 'All time';
 }
 
 /**
@@ -59,7 +59,7 @@ function getDayName(day: number): string {
 /**
  * Format repository summary for display
  */
-export function formatRepoSummary(summary: RepoSummary, days: number): string {
+export function formatRepoSummary(summary: RepoSummary, days: number | undefined): string {
   const lines: string[] = [];
 
   lines.push(chalk.bold(`\n${formatDateRange(days)}\n`));
@@ -212,7 +212,7 @@ export function formatHeatmap(activityPattern: ActivityPattern): string {
 /**
  * Format complete reflect output
  */
-export function formatReflect(output: ReflectOutput, days: number): string {
+export function formatReflect(output: ReflectOutput, days: number | undefined): string {
   const lines: string[] = [];
 
   lines.push(formatRepoSummary(output.summary, days));
@@ -225,7 +225,7 @@ export function formatReflect(output: ReflectOutput, days: number): string {
 /**
  * Format churn table
  */
-export function formatChurnTable(files: FileChurn[], days: number): string {
+export function formatChurnTable(files: FileChurn[], days: number | undefined): string {
   const lines: string[] = [];
 
   lines.push(chalk.bold(`\nFile Churn Analysis (${formatDateRange(days)})\n`));

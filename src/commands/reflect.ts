@@ -11,15 +11,15 @@ export async function reflectCommand(options: BaseOptions): Promise<void> {
     // Parse git history
     const gitParser = await createGitParser();
 
-    // Calculate the date range
-    const since = new Date();
-    since.setDate(since.getDate() - options.days);
+    // Calculate the date range (only if days is specified)
+    const since = options.days ? new Date(Date.now() - options.days * 24 * 60 * 60 * 1000) : undefined;
 
     // Get commits
-    const commits = await gitParser.getCommits(since);
+    const commits = await gitParser.getCommits(since, options.currentBranch);
 
     if (commits.length === 0) {
-      console.log(`No commits found in the last ${options.days} days.`);
+      const timeRange = options.days ? `in the last ${options.days} days` : 'in this repository';
+      console.log(`No commits found ${timeRange}.`);
       return;
     }
 

@@ -90,8 +90,9 @@ export enum OutputFormat {
  * Command options shared across commands
  */
 export interface BaseOptions {
-  days: number;
+  days?: number; // If not specified, show all commits
   json?: boolean;
+  currentBranch?: boolean; // If true, only analyze current branch
 }
 
 /**

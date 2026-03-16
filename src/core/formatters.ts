@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import Table from 'cli-table3';
-import { FileChurn, ActivityPattern, RepoSummary, ReflectOutput, ChurnLevel, FileOwnership, FileRisk, FileCoupling } from '../types.js';
+import { FileChurn, ActivityPattern, RepoSummary, ReflectOutput, ChurnLevel, FileOwnership, FileRisk, FileCoupling, ProjectHealth, BlockersOutput, EvolutionOutput, ContextOutput } from '../types.js';
 
 /**
  * Format a date range as a readable string
@@ -409,6 +409,292 @@ export function formatCouples(couplings: FileCoupling[], days?: number): string 
   }
 
   lines.push(table.toString());
+
+  return lines.join('\n');
+}
+
+// ============================================================================
+// PHASE 3: Project Management Narratives
+// ============================================================================
+
+/**
+ * Format project health report
+ */
+export function formatProjectHealth(health: ProjectHealth): string {
+  const lines: string[] = [];
+
+  lines.push(chalk.bold(`\n📊 Project Health Report\n`));
+  lines.push(chalk.gray('─'.repeat(50)));
+
+  // Timeframe
+  lines.push(`Timeframe: ${health.timeframe.days} days`);
+  lines.push(`(${formatDate(health.timeframe.start)} to ${formatDate(health.timeframe.end)})`);
+
+  // Metrics
+  lines.push(chalk.bold(`\n📈 Key Metrics`));
+  lines.push(`  Total commits: ${health.metrics.totalCommits}`);
+  lines.push(`  Active contributors: ${health.metrics.activeContributors}`);
+  lines.push(`  Bugfix rate: ${(health.metrics.bugfixRate * 100).toFixed(1)}%`);
+  lines.push(`  Revert rate: ${(health.metrics.revertRate * 100).toFixed(1)}%`);
+  lines.push(`  Avg commit size: ${Math.round(health.metrics.avgCommitSize)} lines`);
+
+  // Concerns
+  if (health.concerns.length > 0) {
+    lines.push(chalk.bold(`\n⚠️  Concerns`));
+    for (const concern of health.concerns) {
+      lines.push(`  ${chalk.red('•')} ${concern}`);
+    }
+  } else {
+    lines.push(chalk.bold(`\n✅ No significant concerns`));
+  }
+
+  // Positive signals
+  if (health.positiveSignals.length > 0) {
+    lines.push(chalk.bold(`\n💚 Positive Signals`));
+    for (const signal of health.positiveSignals) {
+      lines.push(`  ${chalk.green('•')} ${signal}`);
+    }
+  }
+
+  // Risk areas
+  lines.push(chalk.bold(`\n🎯 Risk Areas`));
+  lines.push(`  High churn files: ${health.riskAreas.highChurnFiles}`);
+  lines.push(`  Critical risk files: ${health.riskAreas.criticalRiskFiles}`);
+
+  return lines.join('\n');
+}
+
+/**
+ * Format blockers output
+ */
+export function formatBlockers(output: BlockersOutput): string {
+  const lines: string[] = [];
+
+  lines.push(chalk.bold(`\n🚧 Progress Blockers Analysis\n`));
+  lines.push(chalk.gray('─'.repeat(50)));
+
+  // Timeframe
+  lines.push(`Timeframe: ${output.timeframe.days} days`);
+  lines.push(`(${formatDate(output.timeframe.start)} to ${formatDate(output.timeframe.end)})`);
+
+  // Summary
+  lines.push(chalk.bold(`\n📋 Blocker Summary`));
+  lines.push(`  ${chalk.red('Critical:')} ${output.summary.critical}`);
+  lines.push(`  ${chalk.yellow('High:')} ${output.summary.high}`);
+  lines.push(`  ${chalk.blue('Medium:')} ${output.summary.medium}`);
+  lines.push(`  ${chalk.gray('Low:')} ${output.summary.low}`);
+
+  // Blockers
+  if (output.blockers.length === 0) {
+    lines.push(chalk.bold(`\n✅ No significant blockers detected`));
+  } else {
+    lines.push(chalk.bold(`\n⚠️  Detected Blockers\n`));
+
+    for (let i = 0; i < output.blockers.length; i++) {
+      const blocker = output.blockers[i];
+      const severityEmoji = blocker.severity === 'critical' ? '🔴' :
+                           blocker.severity === 'high' ? '🟠' :
+                           blocker.severity === 'medium' ? '🟡' : '🟢';
+
+      lines.push(`${severityEmoji} ${chalk.bold(blocker.type.toUpperCase())} - ${blocker.severity.toUpperCase()}`);
+      lines.push(`  ${blocker.description}`);
+
+      // Evidence
+      if (blocker.evidence.length > 0) {
+        lines.push(`  ${chalk.gray('Evidence:')}`);
+        for (const ev of blocker.evidence) {
+          lines.push(`    ${ev.metric}: ${ev.value}`);
+        }
+      }
+
+      // Affected files
+      if (blocker.affectedFiles.length > 0) {
+        lines.push(`  ${chalk.gray('Affected files:')}`);
+        for (const file of blocker.affectedFiles.slice(0, 3)) {
+          const fileName = file.length > 50 ? file.substring(0, 47) + '...' : file;
+          lines.push(`    • ${fileName}`);
+        }
+        if (blocker.affectedFiles.length > 3) {
+          lines.push(`    ... and ${blocker.affectedFiles.length - 3} more`);
+        }
+      }
+
+      // Suggestion
+      if (blocker.suggestion) {
+        lines.push(`  ${chalk.blue('💡 Suggestion:')} ${blocker.suggestion}`);
+      }
+
+      if (i < output.blockers.length - 1) {
+        lines.push('');
+      }
+    }
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Format evolution output
+ */
+export function formatEvolution(output: EvolutionOutput): string {
+  const lines: string[] = [];
+
+  lines.push(chalk.bold(`\n📈 Codebase Evolution Analysis\n`));
+  lines.push(chalk.gray('─'.repeat(50)));
+
+  // Timeframe
+  lines.push(`Timeframe: ${output.timeframe.periods} ${output.granularity}s`);
+  lines.push(`(${formatDate(output.timeframe.start)} to ${formatDate(output.timeframe.end)})`);
+
+  // Summary
+  lines.push(chalk.bold(`\n📊 Summary`));
+  lines.push(`  Growth rate: ${output.summary.growthRate} commits/${output.granularity}`);
+  lines.push(`  Stability: ${output.summary.stability === 'improving' ? chalk.green('▲ improving') :
+                             output.summary.stability === 'declining' ? chalk.red('▼ declining') :
+                             chalk.gray('→ stable')}`);
+  lines.push(`  Bus factor: ${output.summary.busFactor} contributor(s)`);
+
+  // Trends
+  if (output.trends.length > 0) {
+    lines.push(chalk.bold(`\n📉 Trends`));
+    for (const trend of output.trends) {
+      const arrow = trend.direction === 'up' ? '▲' :
+                   trend.direction === 'down' ? '▼' : '→';
+      const color = trend.direction === 'up' ? chalk.green :
+                   trend.direction === 'down' ? chalk.red : chalk.gray;
+      lines.push(`  ${color(arrow)} ${trend.description} (${trend.changePercent > 0 ? '+' : ''}${trend.changePercent}%)`);
+    }
+  }
+
+  // Data points table
+  if (output.dataPoints.length > 0) {
+    lines.push(chalk.bold(`\n📅 Timeline Data`));
+
+    const table = new Table({
+      head: ['Period', 'Commits', 'Added (+)', 'Deleted (-)', 'Authors', 'Files'],
+      colAligns: ['left', 'right', 'right', 'right', 'right', 'right'],
+      style: {
+        head: [],
+        border: ['gray'],
+      },
+    });
+
+    for (const dp of output.dataPoints) {
+      table.push([
+        dp.period,
+        dp.commits.toString(),
+        chalk.green(dp.insertions.toString()),
+        chalk.red(dp.deletions.toString()),
+        dp.authors.toString(),
+        dp.files.toString(),
+      ]);
+    }
+
+    lines.push(table.toString());
+  }
+
+  return lines.join('\n');
+}
+
+// ============================================================================
+// AI CONTEXT: Comprehensive repo overview for AI assistants
+// ============================================================================
+
+/**
+ * Format AI context output - human-readable overview
+ */
+export function formatContext(context: ContextOutput): string {
+  const lines: string[] = [];
+
+  lines.push(chalk.bold(`\n🤖 Gitspect AI Context\n`));
+  lines.push(chalk.gray('─'.repeat(60)));
+
+  // Overview section
+  const healthEmoji = context.overview.health === 'excellent' ? '🟢' :
+                      context.overview.health === 'good' ? '🟢' :
+                      context.overview.health === 'moderate' ? '🟡' :
+                      context.overview.health === 'concerning' ? '🟠' : '🔴';
+  lines.push(`${healthEmoji} ${chalk.bold('Overall Health:')} ${context.overview.health.toUpperCase()}`);
+  lines.push(`  ${context.overview.totalCommits} commits • ${context.overview.activeContributors} contributors • ${context.overview.timeframeDays} days`);
+  lines.push(`  Primary language: ${chalk.cyan(context.overview.primaryLanguage)} • Velocity: ${context.overview.developmentVelocity.replace('_', ' ')}`);
+
+  // Critical Areas
+  if (context.criticalAreas.highRiskFiles.length > 0) {
+    lines.push(chalk.bold(`\n⚠️  Critical Areas (${context.criticalAreas.highRiskFiles.length} high-risk files)`));
+    for (const file of context.criticalAreas.highRiskFiles.slice(0, 3)) {
+      const riskEmoji = file.riskLevel === 'CRITICAL' ? '🔴' :
+                       file.riskLevel === 'HIGH' ? '🟠' :
+                       file.riskLevel === 'MEDIUM' ? '🟡' : '🟢';
+      lines.push(`  ${riskEmoji} ${file.path}`);
+      lines.push(`      ${chalk.gray(file.why)}`);
+      lines.push(`      ${chalk.blue('💡 ' + file.recommendation)}`);
+    }
+  }
+
+  // Hotspots
+  if (context.criticalAreas.hotspots.length > 0) {
+    lines.push(chalk.bold(`\n🔥 Hotspots (${context.criticalAreas.hotspots.length} files)`));
+    for (const hotspot of context.criticalAreas.hotspots.slice(0, 3)) {
+      lines.push(`  ${hotspot.path}`);
+      lines.push(`      ${hotspot.commits} commits • ${hotspot.comparison}`);
+    }
+  }
+
+  // Ownership
+  lines.push(chalk.bold(`\n👥 Ownership`));
+  lines.push(`  Bus Factor: ${context.ownership.busFactor} contributor(s)`);
+  if (context.ownership.siloRisk) {
+    lines.push(`  ${chalk.yellow('⚠️  Silo risk: Code concentrated in few hands')}`);
+  }
+  lines.push(`  Key owners:`);
+  for (const owner of context.ownership.keyOwners.slice(0, 3)) {
+    lines.push(`    • ${owner.author}: ${owner.ownedFiles} files, ${owner.totalCommits} commits`);
+  }
+
+  // Coupling
+  if (context.coupling.strongCouplings.length > 0) {
+    lines.push(chalk.bold(`\n🔗 Strong Couplings (${context.coupling.strongCouplings.length})`));
+    for (const coupling of context.coupling.strongCouplings.slice(0, 3)) {
+      lines.push(`  ${coupling.file1} ↔ ${coupling.file2}`);
+    }
+  }
+
+  // Patterns
+  lines.push(chalk.bold(`\n📊 Patterns`));
+  lines.push(`  Commit size: ${context.patterns.commitSize}`);
+  lines.push(`  Bugfix rate: ${(context.patterns.bugfixRate * 100).toFixed(1)}%`);
+  lines.push(`  Revert rate: ${(context.patterns.revertRate * 100).toFixed(1)}%`);
+  if (context.patterns.afterHoursActivity) {
+    lines.push(`  ${chalk.yellow('⚠️  Significant after-hours activity detected')}`);
+  }
+  if (context.patterns.weekendActivity) {
+    lines.push(`  ${chalk.yellow('⚠️  Weekend activity detected')}`);
+  }
+
+  // Trends
+  lines.push(chalk.bold(`\n📈 Trends`));
+  lines.push(`  Stability: ${context.trends.stability}`);
+  lines.push(`  Growth: ${context.trends.growthRate}`);
+  lines.push(`  Contributors: ${context.trends.contributorTrend}`);
+
+  // Warnings
+  if (context.warnings.length > 0) {
+    lines.push(chalk.bold(`\n⚠️  Warnings`));
+    for (const warning of context.warnings) {
+      lines.push(`  ${chalk.red('•')} ${warning}`);
+    }
+  }
+
+  // Strengths
+  if (context.strengths.length > 0) {
+    lines.push(chalk.bold(`\n💪 Strengths`));
+    for (const strength of context.strengths) {
+      lines.push(`  ${chalk.green('•')} ${strength}`);
+    }
+  }
+
+  // Metadata
+  lines.push(chalk.gray(`\n---\nGenerated: ${context.metadata.generatedAt}`));
 
   return lines.join('\n');
 }

@@ -1,0 +1,233 @@
+import { promises as fs } from 'fs';
+import { pathToFileURL } from 'url';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+
+/**
+ * Configuration for file filtering and Gitspect behavior
+ */
+export interface FilterConfig {
+  /** Files/patterns to exclude from analysis */
+  exclude?: string[];
+  /** Files/patterns to explicitly include (overrides exclude) */
+  include?: string[];
+  /** SKILL.md prompt behavior: auto (prompt if needed), always (keep updated), never (don't prompt) */
+  skillPrompt?: 'auto' | 'always' | 'never';
+}
+
+/**
+ * Built-in ignore patterns for common noise files
+ */
+const BUILT_IN_IGNORES = [
+  // Lock files
+  'package-lock.json',
+  'yarn.lock',
+  'pnpm-lock.yaml',
+  'bun.lockb',
+  'composer.lock',
+  'Gemfile.lock',
+  'cargo.lock',
+  'poetry.lock',
+  'go.sum',
+  '*.lock',
+
+  // Build artifacts (even if tracked)
+  'dist/',
+  'build/',
+  'out/',
+  'output/',
+  'public/build/',
+  'public/dist/',
+  '.next/',
+  '.nuxt/',
+  'coverage/',
+  '*.min.js',
+  '*.min.css',
+  '*.bundle.js',
+  '*.bundle.css',
+
+  // Generated files
+  '*.generated.*',
+  '*.gen.*',
+  '*.gql.ts',
+  '*.graphql.ts',
+  '*.schema.ts',
+  'swagger.json',
+  'openapi.json',
+  'openapi.yaml',
+
+  // IDE and editor files
+  '.vscode/settings.json',
+  '.idea/',
+  '*.swp',
+  '*.swo',
+  '.DS_Store',
+
+  // Common config noise
+  '.eslintcache',
+  '.stylelintcache',
+  'node_modules/.cache/',
+];
+
+/**
+ * Gitspect filter configuration
+ */
+let gitspectConfig: FilterConfig | null = null;
+let configLoaded = false;
+
+/**
+ * Load .gitspectrc config file from repository root
+ */
+export async function loadConfig(repoRoot: string): Promise<FilterConfig> {
+  if (configLoaded && gitspectConfig !== null) {
+    return gitspectConfig;
+  }
+
+  configLoaded = true;
+  const configPath = join(repoRoot, '.gitspectrc');
+
+  try {
+    const content = await fs.readFile(configPath, 'utf-8');
+    const parsed = JSON.parse(content) as FilterConfig;
+    gitspectConfig = parsed;
+    return gitspectConfig;
+  } catch {
+    // Config file doesn't exist or is invalid - use defaults
+    gitspectConfig = {};
+    return gitspectConfig;
+  }
+}
+
+/**
+ * Reset cached config (useful for testing)
+ */
+export function resetConfigCache(): void {
+  gitspectConfig = null;
+  configLoaded = false;
+}
+
+/**
+ * Test if a file path matches a pattern
+ * Supports simple wildcards and directory patterns
+ */
+export function matchesPattern(filePath: string, pattern: string): boolean {
+  // Exact match
+  if (filePath === pattern) {
+    return true;
+  }
+
+  // Directory pattern (ends with /)
+  if (pattern.endsWith('/')) {
+    return filePath.startsWith(pattern) || filePath.startsWith('/' + pattern);
+  }
+
+  // Wildcard pattern (*)
+  if (pattern.includes('*')) {
+    const regexPattern = pattern
+      .replace(/\./g, '\\.')
+      .replace(/\*/g, '.*');
+    const regex = new RegExp(`^${regexPattern}$`, 'i');
+    return regex.test(filePath);
+  }
+
+  // Suffix/prefix patterns
+  if (pattern.startsWith('/')) {
+    // Match from root
+    return filePath === pattern.slice(1) || filePath.startsWith(pattern.slice(1) + '/');
+  }
+
+  return filePath.endsWith(pattern) || filePath.includes(pattern);
+}
+
+/**
+ * Check if a file should be included in analysis
+ * @param filePath - The file path to check
+ * @param userConfig - Optional user config (uses cached if not provided)
+ * @param respectIgnores - If false, include all files (default: true)
+ */
+export function shouldIncludeFile(
+  filePath: string,
+  userConfig?: FilterConfig,
+  respectIgnores: boolean = true
+): boolean {
+  // If ignore is disabled, include everything
+  if (!respectIgnores) {
+    return true;
+  }
+
+  const config = userConfig ?? gitspectConfig ?? {};
+
+  // Check include list first (explicit includes override excludes)
+  if (config.include && config.include.length > 0) {
+    for (const pattern of config.include) {
+      if (matchesPattern(filePath, pattern)) {
+        return true;
+      }
+    }
+  }
+
+  // Check built-in ignores
+  for (const pattern of BUILT_IN_IGNORES) {
+    if (matchesPattern(filePath, pattern)) {
+      return false;
+    }
+  }
+
+  // Check user excludes
+  if (config.exclude && config.exclude.length > 0) {
+    for (const pattern of config.exclude) {
+      if (matchesPattern(filePath, pattern)) {
+        return false;
+      }
+    }
+  }
+
+  // Default: include the file
+  return true;
+}
+
+/**
+ * Filter a list of files, returning only those that should be included
+ */
+export function filterFiles(
+  filePaths: string[],
+  userConfig?: FilterConfig,
+  respectIgnores: boolean = true
+): string[] {
+  if (!respectIgnores) {
+    return filePaths;
+  }
+
+  return filePaths.filter(path => shouldIncludeFile(path, userConfig, respectIgnores));
+}
+
+/**
+ * Get the built-in ignore patterns (for documentation/debugging)
+ */
+export function getBuiltInIgnores(): string[] {
+  return [...BUILT_IN_IGNORES];
+}
+
+/**
+ * Import types dynamically to avoid circular dependency
+ */
+import type { Commit } from '../types.js';
+
+/**
+ * Filter commits by excluding ignored files from each commit's file list
+ * Returns a new array of commits with filtered file lists
+ */
+export function filterCommits(
+  commits: Commit[],
+  userConfig?: FilterConfig,
+  respectIgnores: boolean = true
+): Commit[] {
+  if (!respectIgnores) {
+    return commits;
+  }
+
+  return commits.map(commit => ({
+    ...commit,
+    files: commit.files.filter(file => shouldIncludeFile(file, userConfig, respectIgnores)),
+  })).filter(commit => commit.files.length > 0); // Remove commits with no files after filtering
+}

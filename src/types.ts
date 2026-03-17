@@ -93,6 +93,7 @@ export interface BaseOptions {
   days?: number; // If not specified, show all commits
   json?: boolean;
   currentBranch?: boolean; // If true, only analyze current branch
+  noIgnore?: boolean; // If true, don't filter out ignored files
 }
 
 /**

@@ -1,20 +1,41 @@
 import simpleGit, { SimpleGit } from 'simple-git';
 import { Commit } from '../types.js';
+import { loadConfig, filterCommits, type FilterConfig } from './filters.js';
 
 /**
  * Git parser for extracting commit history and analyzing repository data
  */
 export class GitParser {
   private git: SimpleGit;
+  private repoRoot: string;
+  private filterConfig: FilterConfig = {};
 
   constructor(repoPath: string = process.cwd()) {
     this.git = simpleGit(repoPath);
+    this.repoRoot = repoPath;
+  }
+
+  /**
+   * Load filter configuration from .gitspectrc
+   */
+  async loadFilterConfig(): Promise<void> {
+    this.filterConfig = await loadConfig(this.repoRoot);
   }
 
   /**
    * Get all commits since a specific date (or all commits if since is undefined)
    */
   async getCommits(since?: Date, currentBranchOnly = false): Promise<Commit[]> {
+    return this.getFilteredCommits(since, currentBranchOnly, true);
+  }
+
+  /**
+   * Get commits with optional filtering
+   * @param since - Start date for commits
+   * @param currentBranchOnly - Only analyze current branch
+   * @param respectIgnores - If false, include all files (use --no-ignore)
+   */
+  async getFilteredCommits(since?: Date, currentBranchOnly = false, respectIgnores: boolean = true): Promise<Commit[]> {
     const options: Record<string, unknown> = {};
 
     // Only add --since filter if a date is provided
@@ -47,6 +68,11 @@ export class GitParser {
         insertions,
         deletions,
       });
+    }
+
+    // Apply file filtering if requested
+    if (respectIgnores) {
+      return filterCommits(commits, this.filterConfig, respectIgnores);
     }
 
     return commits;
@@ -156,6 +182,9 @@ export async function createGitParser(repoPath?: string): Promise<GitParser> {
   if (!isRepo) {
     throw new Error('Not a git repository. Please run gitspect from within a git repository.');
   }
+
+  // Load filter configuration from .gitspectrc
+  await parser.loadFilterConfig();
 
   return parser;
 }

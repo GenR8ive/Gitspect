@@ -1,0 +1,39 @@
+# Source files (we only ship compiled JS)
+src/
+*.ts
+tsconfig.json
+
+# Development files
+.eslintrc*
+.prettierrc*
+.editorconfig
+
+# Tests
+test/
+tests/
+*.test.ts
+*.spec.ts
+**/__tests__/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Documentation (README is kept)
+CHANGELOG.md
+CONTRIBUTING.md
+docs/
+
+# Development configs
+.vscode/
+.idea/
+
+# Build artifacts (other than dist/)
+*.tgz
+*.log
+
+# Memory/config files specific to development
+.claude/
+CLAUDE.md
+memory/

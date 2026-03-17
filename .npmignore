@@ -20,7 +20,7 @@ tests/
 .gitlab-ci.yml
 .travis.yml
 
-# Documentation (README is kept)
+# Documentation (README and skills.md are kept)
 CHANGELOG.md
 CONTRIBUTING.md
 docs/
@@ -37,3 +37,6 @@ docs/
 .claude/
 CLAUDE.md
 memory/
+
+# Example config (ship this)
+!.gitspectrc.example

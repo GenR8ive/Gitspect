@@ -1,6 +1,8 @@
 # Gitspect
 
-> Privacy-first, offline Git history analysis for developers using AI-assisted workflows.
+> Git history analysis that reveals what your commit messages won't tell you.
+
+**Where you struggled.** **What keeps breaking.** **Who owns what.** **Why your project feels slow.**
 
 Your repository remembers everything.
 **Gitspect tells you what matters.**
@@ -10,12 +12,14 @@ Your repository remembers everything.
 ## What is Gitspect?
 
 Gitspect transforms commit data into actionable insights about:
-- **Codebase health** - Which files are risky, unstable, or over-engineered
-- **Personal patterns** - When you code most, burnout signals, context recovery
-- **Team dynamics** - Ownership, coupling, bus factor
-- **Evolution trends** - Growth patterns, stability over time
+- **Risk areas** - Files that are bug-prone, unstable, or over-engineered
+- **Ownership** - Who owns which files, coupling patterns, bus factor
+- **Evolution** - Growth trends, stability changes, velocity over time
+- **Team patterns** - Activity heatmaps, burnout signals, collaboration health
 
-**Privacy-first**: 100% offline analysis by default. No APIs, no cloud, no data leaving your machine.
+**Privacy-first**: 100% offline analysis. No APIs, no cloud, no data leaving your machine.
+
+**Built for AI workflows**: Auto-generates `SKILL.md` files that help AI assistants understand your repository.
 
 ---
 
@@ -36,19 +40,35 @@ npx gitspect <command>
 ## Quick Start
 
 ```bash
+# First-time setup (creates config and AI skills)
+gitspect init
+
 # Personal retrospective - what did I work on?
 gitspect reflect
 
 # Find risky files
 gitspect scars
 
-# Comprehensive AI context (for AI assistants)
+# Comprehensive overview for AI assistants
 gitspect context --json
 ```
 
 ---
 
 ## Commands
+
+### Setup
+
+| Command | Description |
+|---------|-------------|
+| `gitspect init` | Initialize `.gitspectrc` config and auto-generate `skills/gitspect/SKILL.md` for AI agents |
+
+**Example:**
+```bash
+gitspect init
+# ✓ Created .gitspectrc
+# ✓ Created skills/gitspect/SKILL.md
+```
 
 ### Phase 1: Personal Retrospective
 
@@ -119,12 +139,66 @@ All commands support these options:
 | `--days <n>` | Time period in days (default: all time, all branches) |
 | `--current-branch` | Only analyze the current branch (default: all branches) |
 | `--json` | Output as JSON (for AI consumption) |
+| `--no-ignore` | Include files that would normally be filtered (lock files, build artifacts, etc.) |
+| `--limit <n>` | Limit output to top N results (churn, scars, couples) |
+| `--granularity <week\|month>` | Time granularity for evolution command |
+
+---
+
+## Configuration
+
+Create `.gitspectrc` in your repository root to customize behavior:
+
+```json
+{
+  "exclude": [
+    "tests/fixtures/",
+    "*.mock.ts",
+    "docs/"
+  ],
+  "include": [],
+  "skillPrompt": "auto"
+}
+```
+
+### Options
+
+| Setting | Description |
+|---------|-------------|
+| `exclude` | File patterns to ignore during analysis (lock files, build artifacts, etc.) |
+| `include` | File patterns to explicitly include (overrides exclude) |
+| `skillPrompt` | Control AI skill file behavior: `auto` (prompt if needed), `always` (auto-update), `never` (don't create) |
+
+### Built-in Ignores
+
+Gitspect automatically filters out common noise files:
+
+- **Lock files**: `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, etc.
+- **Build artifacts**: `dist/`, `build/`, `*.min.js`, etc.
+- **Generated files**: `*.generated.*`, `*.gql.ts`, swagger files, etc.
+
+Use `--no-ignore` to include all files if needed.
 
 ---
 
 ## AI Integration
 
-Gitspect is designed to work with AI assistants (Claude, ChatGPT, etc.).
+Gitspect is designed to work with AI assistants (Claude, Cursor, ChatGPT, etc.).
+
+### SKILL.md Auto-Generation
+
+When you run `gitspect init`, it creates `skills/gitspect/SKILL.md` - a context file that AI agents automatically use to understand your repository.
+
+The `SKILL.md` includes:
+- When to use Gitspect commands
+- What each command reveals
+- How to interpret the output
+- Project-specific patterns (can be customized)
+
+**Auto-update behavior:**
+- `skillPrompt: "auto"` - Prompts to update SKILL.md when Gitspect version changes
+- `skillPrompt: "always"` - Automatically keeps SKILL.md updated
+- `skillPrompt: "never"` - Disables SKILL.md management
 
 ### For AI Agents
 
@@ -146,6 +220,10 @@ Run `gitspect context --json` to get a comprehensive repo overview:
       "why": "3x higher churn than average; 28% bugfix rate",
       "recommendation": "proceed with caution, add tests"
     }]
+  },
+  "ownership": {
+    "busFactor": 2,
+    "keyOwners": [...]
   },
   "warnings": [
     "Low bus factor: project depends on 2 or fewer contributors"
@@ -185,7 +263,8 @@ npm link
 - [x] Phase 1: Personal retrospectives (reflect, churn, heatmap)
 - [x] Phase 2: Contributor onboarding (blame-map, scars, couples)
 - [x] Phase 3: Project management (report, blockers, evolution)
-- [x] AI Context (context command)
+- [x] AI Context (context command, SKILL.md auto-generation)
+- [x] File filtering (built-in ignores, .gitspectrc config)
 - [ ] Phase 4: Enhanced AI integration (agent prompts, .cursorrules generation)
 - [ ] LLM integration (optional local/cloud models)
 
@@ -193,4 +272,4 @@ npm link
 
 ## License
 
-MIT
+MIT © [tscburak](https://github.com/tscburak)

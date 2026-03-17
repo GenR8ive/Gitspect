@@ -1,7 +1,7 @@
 {
   "name": "gitspect",
   "version": "0.1.0",
-  "description": "Privacy-first, offline-capable Git history analysis tool for AI-assisted developers",
+  "description": "Git history analysis for AI workflows - discover risk, ownership, and evolution patterns in your codebase",
   "type": "module",
   "main": "./dist/cli.js",
   "bin": {
@@ -10,7 +10,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "skills.md"
   ],
   "exports": {
     ".": "./dist/cli.js"
@@ -38,12 +39,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/<username>/gitspect.git"
+    "url": "git+https://github.com/tscburak/gitspect.git"
   },
   "bugs": {
-    "url": "https://github.com/<username>/gitspect/issues"
+    "url": "https://github.com/tscburak/gitspect/issues"
   },
-  "homepage": "https://github.com/<username>/gitspect#readme",
+  "homepage": "https://github.com/tscburak/gitspect#readme",
   "dependencies": {
     "commander": "^12.0.0",
     "simple-git": "^3.24.0",

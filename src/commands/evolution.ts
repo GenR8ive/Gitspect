@@ -14,8 +14,9 @@ export async function evolution(options: EvolutionOptions = {}): Promise<void> {
     // Calculate the date range (only if days is specified)
     const since = options.days ? new Date(Date.now() - options.days * 24 * 60 * 60 * 1000) : undefined;
 
-    // Get commits
-    const commits = await parser.getCommits(since, options.currentBranch);
+    // Get commits (optionally filtering ignored files)
+    const respectIgnores = !options.noIgnore;
+    const commits = await parser.getFilteredCommits(since, options.currentBranch, respectIgnores);
 
     if (commits.length === 0) {
       console.log('No commits found in the repository.');

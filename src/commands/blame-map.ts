@@ -14,8 +14,9 @@ export async function blameMapCommand(options: BaseOptions): Promise<void> {
     // Calculate the date range (only if days is specified)
     const since = options.days ? new Date(Date.now() - options.days * 24 * 60 * 60 * 1000) : undefined;
 
-    // Get commits
-    const commits = await gitParser.getCommits(since, options.currentBranch);
+    // Get commits (optionally filtering ignored files)
+    const respectIgnores = !options.noIgnore;
+    const commits = await gitParser.getFilteredCommits(since, options.currentBranch, respectIgnores);
 
     if (commits.length === 0) {
       const timeRange = options.days ? `in the last ${options.days} days` : 'in this repository';

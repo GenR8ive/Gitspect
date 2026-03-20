@@ -615,7 +615,10 @@ export function formatContext(context: ContextOutput): string {
                       context.overview.health === 'moderate' ? '🟡' :
                       context.overview.health === 'concerning' ? '🟠' : '🔴';
   lines.push(`${healthEmoji} ${chalk.bold('Overall Health:')} ${context.overview.health.toUpperCase()}`);
-  lines.push(`  ${context.overview.totalCommits} commits • ${context.overview.activeContributors} contributors • ${context.overview.timeframeDays} days`);
+  const contributorsStr = context.overview.botCount > 0
+    ? `${context.overview.activeContributors} humans + ${context.overview.botCount} bots`
+    : `${context.overview.activeContributors} contributors`;
+  lines.push(`  ${context.overview.totalCommits} commits • ${contributorsStr} • ${context.overview.timeframeDays} days`);
   lines.push(`  Primary language: ${chalk.cyan(context.overview.primaryLanguage)} • Velocity: ${context.overview.developmentVelocity.replace('_', ' ')}`);
 
   // Critical Areas

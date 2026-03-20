@@ -1,6 +1,122 @@
 import { Commit, FileMetrics, FileChurn, ChurnLevel, ActivityPattern, ActivitySlot, RepoSummary, FileOwnership, FileRisk, FileCoupling, ProjectHealth, ProgressBlocker, BlockersOutput, EvolutionDataPoint, Trend, TrendDirection, EvolutionOutput, ContextOutput } from '../types.js';
 
 /**
+ * Patterns that indicate a bot contributor
+ */
+const BOT_PATTERNS = [
+  /\[bot\]$/i,           // GitHub bots: username[bot]
+  /-bot$/i,              // username-bot
+  /bot$/i,               // usernamebot (lower priority)
+  /\[ci\]$/i,            // CI bots
+  /dependabot/i,         // Dependabot
+  /renovate/i,           // Renovate bot
+  /greenkeeper/i,        // Greenkeeper
+  /snyk/i,               // Snyk bot
+  /autofix/i,            // Autofix CI
+  /copilot/i,            // Copilot agents
+];
+
+/**
+ * Check if an author name is a bot
+ */
+export function isBotAuthor(author: string): boolean {
+  return BOT_PATTERNS.some(pattern => pattern.test(author));
+}
+
+/**
+ * Filter out bot commits, returning only human commits
+ */
+export function filterBotCommits(commits: Commit[]): Commit[] {
+  return commits.filter(commit => !isBotAuthor(commit.author));
+}
+
+/**
+ * Get bot and human contributor counts
+ */
+export function getContributorBreakdown(authors: string[]): { humans: string[]; bots: string[] } {
+  const humans: string[] = [];
+  const bots: string[] = [];
+
+  for (const author of authors) {
+    if (isBotAuthor(author)) {
+      bots.push(author);
+    } else {
+      humans.push(author);
+    }
+  }
+
+  return { humans, bots };
+}
+
+/**
+ * Check if a file is a config file that should be excluded from coupling analysis
+ * Config files often change together but don't represent meaningful code coupling
+ */
+export function isConfigFile(filePath: string): boolean {
+  const configFilePatterns = [
+    'package.json',
+    'package-lock.json',
+    'yarn.lock',
+    'pnpm-lock.yaml',
+    'bun.lockb',
+    'tsconfig.json',
+    '.eslintrc',
+    '.eslintrc.json',
+    '.eslintrc.js',
+    '.eslintrc.cjs',
+    '.prettierrc',
+    '.prettierrc.json',
+    '.prettierrc.js',
+    '.prettierrc.cjs',
+    '.prettierignore',
+    '.gitignore',
+    '.dockerignore',
+    'Dockerfile',
+    'docker-compose.yml',
+    'docker-compose.yaml',
+    '.env',
+    '.env.example',
+    '.editorconfig',
+    '.babelrc',
+    '.babelrc.json',
+    '.babelrc.js',
+    'babel.config.js',
+    'babel.config.json',
+    'jest.config.js',
+    'jest.config.json',
+    'vitest.config.ts',
+    'vite.config.ts',
+    'next.config.js',
+    'next.config.mjs',
+    'nuxt.config.ts',
+    '.stylelintrc',
+    '.stylelintrc.json',
+    'tsconfig.build.json',
+  ];
+
+  // Check exact matches
+  const fileName = filePath.split('/').pop() || filePath;
+  if (configFilePatterns.includes(fileName)) {
+    return true;
+  }
+
+  // Check patterns
+  if (filePath.endsWith('.lock')) {
+    return true;
+  }
+
+  if (/^\.env/.test(filePath)) {
+    return true;
+  }
+
+  if (/\.(config|rc)\.(js|ts|json|cjs|mjs)$/.test(filePath)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Patterns that indicate a bugfix commit
  */
 const BUGFIX_PATTERNS = [
@@ -129,6 +245,7 @@ export function calculateActivityPattern(commits: Commit[]): ActivityPattern {
  */
 export function calculateRepoSummary(commits: Commit[]): RepoSummary {
   const authors = new Set<string>();
+  const humanAuthors = new Set<string>();
   let totalInsertions = 0;
   let totalDeletions = 0;
 
@@ -137,6 +254,9 @@ export function calculateRepoSummary(commits: Commit[]): RepoSummary {
 
   for (const commit of commits) {
     authors.add(commit.author);
+    if (!isBotAuthor(commit.author)) {
+      humanAuthors.add(commit.author);
+    }
     totalInsertions += commit.insertions;
     totalDeletions += commit.deletions;
 
@@ -152,7 +272,7 @@ export function calculateRepoSummary(commits: Commit[]): RepoSummary {
     totalCommits: commits.length,
     totalInsertions,
     totalDeletions,
-    authors: Array.from(authors),
+    authors: Array.from(humanAuthors), // Only human authors
     dateRange: {
       start: oldestDate,
       end: newestDate,
@@ -391,11 +511,15 @@ export function calculateFileCoupling(commits: Commit[]): FileCoupling[] {
     const files = commit.files;
     if (files.length < 2) continue;
 
+    // Filter out config files that create noise in coupling analysis
+    const relevantFiles = files.filter(file => !isConfigFile(file));
+    if (relevantFiles.length < 2) continue;
+
     // Generate all pairs
-    for (let i = 0; i < files.length; i++) {
-      for (let j = i + 1; j < files.length; j++) {
+    for (let i = 0; i < relevantFiles.length; i++) {
+      for (let j = i + 1; j < relevantFiles.length; j++) {
         // Create a canonical key (alphabetically sorted)
-        const [file1, file2] = [files[i], files[j]].sort();
+        const [file1, file2] = [relevantFiles[i], relevantFiles[j]].sort();
         const key = `${file1}|${file2}`;
 
         const currentCount = couplingMap.get(key) || 0;
@@ -460,14 +584,18 @@ export function calculateProjectHealth(commits: Commit[], startDate: Date, endDa
   }
 
   // Analyze positive signals
-  const authors = new Set(commits.map(c => c.author));
-  if (authors.size >= 3) {
-    positiveSignals.push(`${authors.size} active contributors - healthy collaboration`);
+  const allAuthors = new Set(commits.map(c => c.author));
+  const humanAuthors = new Set(commits.filter(c => !isBotAuthor(c.author)).map(c => c.author));
+  if (humanAuthors.size >= 3) {
+    positiveSignals.push(`${humanAuthors.size} active contributors - healthy collaboration`);
   }
   const avgCommitsPerDay = commits.length / Math.max(1, getDaysBetween(startDate, endDate));
   if (avgCommitsPerDay > 5) {
     positiveSignals.push(`Strong development momentum (${Math.round(avgCommitsPerDay)} commits/day)`);
   }
+
+  // Count bots separately for informational purposes
+  const botAuthors = new Set(Array.from(allAuthors).filter(a => isBotAuthor(a)));
 
   return {
     concerns,
@@ -479,7 +607,7 @@ export function calculateProjectHealth(commits: Commit[], startDate: Date, endDa
       avgCommitSize: commits.length > 0
         ? (commits.reduce((sum, c) => sum + c.insertions + c.deletions, 0) / commits.length)
         : 0,
-      activeContributors: authors.size,
+      activeContributors: humanAuthors.size,
     },
     riskAreas: {
       highChurnFiles: fileChurns.filter(f => f.churnLevel === ChurnLevel.HIGH).length,
@@ -616,7 +744,8 @@ export function calculateEvolution(
   const sortedPeriods = Array.from(periodMap.keys()).sort();
   for (const period of sortedPeriods) {
     const periodCommits = periodMap.get(period)!;
-    const authors = new Set(periodCommits.map(c => c.author));
+    const humanCommits = periodCommits.filter(c => !isBotAuthor(c.author));
+    const authors = new Set(humanCommits.map(c => c.author));
     const files = new Set(periodCommits.flatMap(c => c.files));
 
     dataPoints.push({
@@ -624,7 +753,7 @@ export function calculateEvolution(
       commits: periodCommits.length,
       insertions: periodCommits.reduce((sum, c) => sum + c.insertions, 0),
       deletions: periodCommits.reduce((sum, c) => sum + c.deletions, 0),
-      authors: authors.size,
+      authors: authors.size, // Human authors only
       files: files.size,
     });
   }
@@ -670,9 +799,13 @@ export function calculateEvolution(
     ? dataPoints.reduce((sum: number, dp: EvolutionDataPoint) => sum + dp.commits, 0) / periods
     : 0;
 
-  const authorCounts = dataPoints.map((dp: EvolutionDataPoint) => dp.authors);
-  const minAuthors = Math.min(...authorCounts, 1);
-  const busFactor = minAuthors;
+  // Bus factor: median contributors per period (more stable than minimum)
+  const authorCounts = dataPoints.map((dp: EvolutionDataPoint) => dp.authors).sort((a, b) => a - b);
+  const mid = Math.floor(authorCounts.length / 2);
+  const medianAuthors = authorCounts.length % 2 !== 0
+    ? authorCounts[mid]
+    : Math.round((authorCounts[mid - 1] + authorCounts[mid]) / 2);
+  const busFactor = medianAuthors || 1;
 
   // Determine stability
   const recentCommits = dataPoints.slice(-3).reduce((sum: number, dp: EvolutionDataPoint) => sum + dp.commits, 0) / Math.min(3, dataPoints.length);
@@ -836,10 +969,11 @@ export function calculateContext(commits: Commit[], startDate: Date, endDate: Da
       lastRewritten: getRelativeTime(f.lastModified),
     }));
 
-  // Build ownership insights
+  // Build ownership insights (filter out bots)
   const authorCommits = new Map<string, number>();
   const authorFiles = new Map<string, Set<string>>();
   for (const ownership of fileOwnerships) {
+    if (isBotAuthor(ownership.primaryAuthor)) continue; // Skip bots
     authorCommits.set(ownership.primaryAuthor, (authorCommits.get(ownership.primaryAuthor) || 0) + ownership.totalCommits);
     if (!authorFiles.has(ownership.primaryAuthor)) {
       authorFiles.set(ownership.primaryAuthor, new Set());
@@ -856,9 +990,17 @@ export function calculateContext(commits: Commit[], startDate: Date, endDate: Da
       totalCommits: commits,
     }));
 
-  const topContributorPct = fileOwnerships.length > 0
-    ? fileOwnerships.filter(o => o.primaryAuthor === keyOwners[0]?.author).reduce((sum, o) => sum + o.totalCommits, 0) /
-      Math.max(1, commits.length)
+  // Count bots separately
+  const allAuthors = new Set(commits.map(c => c.author));
+  const botAuthors = Array.from(allAuthors).filter(a => isBotAuthor(a));
+  const humanCommits = commits.filter(c => !isBotAuthor(c.author));
+
+  const topContributorPct = humanCommits.length > 0 && keyOwners.length > 0
+    ? fileOwnerships
+        .filter(o => !isBotAuthor(o.primaryAuthor))
+        .filter(o => o.primaryAuthor === keyOwners[0]?.author)
+        .reduce((sum, o) => sum + o.totalCommits, 0) /
+      Math.max(1, humanCommits.length)
     : 0;
   const siloRisk = topContributorPct > 0.5;
 
@@ -925,6 +1067,7 @@ export function calculateContext(commits: Commit[], startDate: Date, endDate: Da
       health,
       totalCommits: commits.length,
       activeContributors: projectHealth.metrics.activeContributors,
+      botCount: botAuthors.length,
       timeframeDays: days,
       primaryLanguage,
       developmentVelocity,

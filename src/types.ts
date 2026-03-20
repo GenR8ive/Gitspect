@@ -277,6 +277,7 @@ export interface ContextOutput {
     health: 'excellent' | 'good' | 'moderate' | 'concerning' | 'critical';
     totalCommits: number;
     activeContributors: number;
+    botCount: number; // Number of bot contributors (filtered from human metrics)
     timeframeDays: number;
     primaryLanguage: string;
     developmentVelocity: 'very_high' | 'high' | 'moderate' | 'low';

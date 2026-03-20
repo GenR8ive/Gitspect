@@ -36,7 +36,10 @@ export class GitParser {
    * @param respectIgnores - If false, include all files (use --no-ignore)
    */
   async getFilteredCommits(since?: Date, currentBranchOnly = false, respectIgnores: boolean = true): Promise<Commit[]> {
-    const options: Record<string, unknown> = {};
+    const options: Record<string, unknown> = {
+      // Custom format: hash|author|date|message (pipe-delimited for easy parsing)
+      '--format': '%H|%an|%ai|%s',
+    };
 
     // Only add --since filter if a date is provided
     if (since) {
@@ -48,27 +51,19 @@ export class GitParser {
       options['--all'] = true;
     }
 
-    const log = await this.git.log(options);
+    // Get raw log output with stat information in a single call
+    const rawLog = await this.git.raw([
+      'log',
+      options['--since'] ? `--since=${options['--since']}` : null,
+      !currentBranchOnly ? '--all' : null,
+      '--format=%H|%an|%ai|%s',
+      '--stat',
+      '--stat-width=200',
+      '--stat-name-width=150',
+    ].filter(Boolean) as string[]);
 
-    // Get detailed stats for each commit
-    const commits: Commit[] = [];
-    for (const entry of log.all) {
-      const diff = await this.git.show([entry.hash, '--stat', '--format=']);
-
-      // Parse files and line changes from stat output
-      const files = this.parseFilesFromStat(diff);
-      const { insertions, deletions } = this.parseLineChanges(diff);
-
-      commits.push({
-        hash: entry.hash,
-        author: entry.author_name,
-        date: new Date(entry.date),
-        message: entry.message,
-        files,
-        insertions,
-        deletions,
-      });
-    }
+    // Parse the combined log output
+    const commits = this.parseLogWithStat(rawLog);
 
     // Apply file filtering if requested
     if (respectIgnores) {
@@ -169,6 +164,75 @@ export class GitParser {
     }
 
     return { insertions, deletions };
+  }
+
+  /**
+   * Parse combined git log output with stat information
+   * Input format:
+   *   hash|author|date|message
+   *    src/file.ts | 10 +---
+   *    1 file changed, 5 insertions(+), 3 deletions(-)
+   *   (blank line)
+   *   hash|author|date|message
+   *   ...
+   */
+  private parseLogWithStat(rawLog: string): Commit[] {
+    const commits: Commit[] = [];
+    const lines = rawLog.split('\n');
+
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i].trim();
+
+      // Skip empty lines and stat summary separators
+      if (!line || line.startsWith('|') || line.match(/^\d+\s+file/)) {
+        i++;
+        continue;
+      }
+
+      // Parse commit header (pipe-delimited)
+      const headerMatch = line.match(/^([a-f0-9]+)\|(.+)\|(.+)\|(.+)$/);
+      if (headerMatch) {
+        const [, hash, author, dateStr, ...messageParts] = headerMatch;
+        const message = messageParts.join('|').trim();
+
+        // Collect stat lines until next commit header or end
+        const statLines: string[] = [];
+        i++;
+        while (i < lines.length) {
+          const statLine = lines[i];
+          // Stop at next commit header (starts with hash)
+          if (statLine.match(/^[a-f0-9]+\|/)) {
+            break;
+          }
+          // Include stat lines and summary lines
+          if (statLine.trim() && !statLine.match(/^commit\s+[a-f0-9]+/)) {
+            statLines.push(statLine);
+          }
+          i++;
+        }
+
+        const statOutput = statLines.join('\n');
+        const files = this.parseFilesFromStat(statOutput);
+        const { insertions, deletions } = this.parseLineChanges(statOutput);
+
+        commits.push({
+          hash,
+          author,
+          date: new Date(dateStr),
+          message,
+          files,
+          insertions,
+          deletions,
+        });
+
+        // Don't increment i here - we're already at the right position
+      } else {
+        i++;
+      }
+    }
+
+    return commits;
   }
 }
 

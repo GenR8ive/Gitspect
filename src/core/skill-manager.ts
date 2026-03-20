@@ -1,10 +1,65 @@
 import { promises as fs } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { loadConfig, type FilterConfig } from './filters.js';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const GIT_SPECT_VERSION = '0.1.0';
-const SKILL_PATH = 'skills/gitspect/SKILL.md';
 const CONFIG_PATH = '.gitspectrc';
+
+/**
+ * Agent configuration
+ */
+interface AgentConfig {
+  id: string;
+  name: string;
+  description: string;
+  path: string;
+  default?: boolean;
+}
+
+/**
+ * Built-in agents configuration
+ */
+const BUILT_IN_AGENTS: AgentConfig[] = [
+  {
+    id: 'default',
+    name: 'Default (.agents)',
+    description: 'Standard agents folder (recommended)',
+    path: '.agents/skills/gitspect/SKILL.md',
+    default: true,
+  },
+  {
+    id: 'claude',
+    name: 'Claude Code',
+    description: 'Claude Code desktop app',
+    path: '.claude/skills/gitspect/SKILL.md',
+  },
+  {
+    id: 'opencode',
+    name: 'OpenCode',
+    description: 'OpenCode AI editor',
+    path: '.opencode/skills/gitspect/SKILL.md',
+  },
+  {
+    id: 'windsurf',
+    name: 'Windsurf',
+    description: 'Windsurf IDE (Cascade)',
+    path: '.windsurf/skills/gitspect/SKILL.md',
+  },
+  {
+    id: 'cursor',
+    name: 'Cursor',
+    description: 'Cursor AI IDE',
+    path: '.cursor/skills/gitspect/SKILL.md',
+  },
+  {
+    id: 'github',
+    name: 'GitHub Copilot / VS Code',
+    description: 'GitHub skills (new standard)',
+    path: '.github/skills/gitspect/SKILL.md',
+  },
+];
 
 /**
  * Skill file frontmatter
@@ -23,6 +78,7 @@ interface SkillCheckResult {
   currentVersion?: string;
   shouldPrompt: boolean;
   configExists: boolean;
+  missingAgents: string[];
 }
 
 /**
@@ -31,9 +87,45 @@ interface SkillCheckResult {
 let sessionAsked = false;
 
 /**
+ * Get all available agents
+ */
+export async function getAllAgents(): Promise<AgentConfig[]> {
+  return BUILT_IN_AGENTS;
+}
+
+/**
+ * Get agents that have SKILL.md files already created
+ */
+export async function getEnabledAgents(repoRoot: string): Promise<AgentConfig[]> {
+  const enabled: AgentConfig[] = [];
+
+  for (const agent of BUILT_IN_AGENTS) {
+    const skillPath = join(repoRoot, agent.path);
+    if (await fileExists(skillPath)) {
+      enabled.push(agent);
+    }
+  }
+
+  // If no agents have SKILL.md, return default agent
+  return enabled.length > 0 ? enabled : BUILT_IN_AGENTS.filter(a => a.default);
+}
+
+/**
+ * Get agents that should be created (for init command)
+ */
+export async function getAgentsToCreate(repoRoot: string, selectedIds: string[]): Promise<AgentConfig[]> {
+  if (selectedIds.length === 0) {
+    // Default to default agent
+    return BUILT_IN_AGENTS.filter(a => a.default);
+  }
+  return BUILT_IN_AGENTS.filter(a => selectedIds.includes(a.id));
+}
+
+/**
  * Check if we should prompt about SKILL.md
  * - Respects skillPrompt setting in .gitspectrc
  * - Only ask once per session
+ * - Checks all agent locations
  */
 export async function shouldPromptAboutSkill(repoRoot: string): Promise<SkillCheckResult> {
   // Load config to check skillPrompt setting
@@ -42,7 +134,7 @@ export async function shouldPromptAboutSkill(repoRoot: string): Promise<SkillChe
 
   // Check session state
   if (sessionAsked) {
-    return { exists: false, isStale: false, shouldPrompt: false, configExists };
+    return { exists: false, isStale: false, shouldPrompt: false, configExists, missingAgents: [] };
   }
 
   // Check skillPrompt setting
@@ -50,46 +142,71 @@ export async function shouldPromptAboutSkill(repoRoot: string): Promise<SkillChe
 
   // If set to "never", don't prompt
   if (skillPrompt === 'never') {
-    return { exists: false, isStale: false, shouldPrompt: false, configExists };
+    return { exists: false, isStale: false, shouldPrompt: false, configExists, missingAgents: [] };
   }
 
-  // Check if SKILL.md exists
-  const skillPath = join(repoRoot, SKILL_PATH);
-  const skillExists = await fileExists(skillPath);
+  // Get all agents to check (not just enabled ones)
+  const agentsToCheck = BUILT_IN_AGENTS;
+  const missingAgents: string[] = [];
+  let anyExists = false;
+  let anyIsStale = false;
+  let staleVersion: string | undefined;
 
-  if (!skillExists) {
+  // Check each agent location
+  for (const agent of agentsToCheck) {
+    const skillPath = join(repoRoot, agent.path);
+    const skillExists = await fileExists(skillPath);
+
+    if (!skillExists) {
+      continue;
+    }
+
+    anyExists = true;
+
+    // Parse version from SKILL.md
+    const content = await fs.readFile(skillPath, 'utf-8');
+    const version = extractVersion(content);
+
+    if (!version) {
+      anyIsStale = true;
+      staleVersion = 'unknown';
+      break;
+    }
+
+    // Compare versions
+    if (version !== GIT_SPECT_VERSION) {
+      anyIsStale = true;
+      staleVersion = version;
+    }
+  }
+
+  // If no skill files exist
+  if (!anyExists) {
     // If set to "always", auto-create without prompting
     if (skillPrompt === 'always') {
-      await createSkillFile(repoRoot);
-      return { exists: false, isStale: false, shouldPrompt: false, configExists };
+      await createDefaultSkillFile(repoRoot);
+      return { exists: false, isStale: false, shouldPrompt: false, configExists, missingAgents: [] };
     }
-    return { exists: false, isStale: false, shouldPrompt: true, configExists };
+    return { exists: false, isStale: false, shouldPrompt: true, configExists, missingAgents: [] };
   }
 
-  // Parse version from SKILL.md
-  const content = await fs.readFile(skillPath, 'utf-8');
-  const version = extractVersion(content);
-
-  if (!version) {
-    // No version found - treat as stale
-    return { exists: true, isStale: true, currentVersion: 'unknown', shouldPrompt: true, configExists };
-  }
-
-  // Compare versions
-  const isStale = version !== GIT_SPECT_VERSION;
-
-  // If set to "always", auto-update without prompting
-  if (isStale && skillPrompt === 'always') {
-    await createSkillFile(repoRoot);
-    return { exists: true, isStale: false, currentVersion: version, shouldPrompt: false, configExists };
+  // If any files are stale
+  if (anyIsStale) {
+    // If set to "always", auto-update without prompting
+    if (skillPrompt === 'always') {
+      await updateExistingSkillFiles(repoRoot);
+      return { exists: true, isStale: false, currentVersion: staleVersion, shouldPrompt: false, configExists, missingAgents: [] };
+    }
+    return { exists: true, isStale: true, currentVersion: staleVersion, shouldPrompt: true, configExists, missingAgents: [] };
   }
 
   return {
     exists: true,
-    isStale,
-    currentVersion: version,
-    shouldPrompt: isStale,
+    isStale: false,
+    currentVersion: GIT_SPECT_VERSION,
+    shouldPrompt: false,
     configExists,
+    missingAgents,
   };
 }
 
@@ -101,15 +218,59 @@ export function markSessionAsked(): void {
 }
 
 /**
- * Create SKILL.md with current version
+ * Create SKILL.md files for specified agents
+ */
+export async function createSkillFiles(repoRoot: string, agentIds: string[]): Promise<string[]> {
+  const agents = await getAgentsToCreate(repoRoot, agentIds);
+  const content = getSkillContent();
+  const createdPaths: string[] = [];
+
+  for (const agent of agents) {
+    const skillPath = join(repoRoot, agent.path);
+    const skillDir = dirname(skillPath);
+
+    // Create directory if it doesn't exist
+    await fs.mkdir(skillDir, { recursive: true });
+
+    // Write SKILL.md
+    await fs.writeFile(skillPath, content, 'utf-8');
+    createdPaths.push(skillPath);
+  }
+
+  return createdPaths;
+}
+
+/**
+ * Create SKILL.md for default agent only
+ */
+export async function createDefaultSkillFile(repoRoot: string): Promise<void> {
+  const defaultAgent = BUILT_IN_AGENTS.find(a => a.default);
+  if (!defaultAgent) return;
+
+  const skillPath = join(repoRoot, defaultAgent.path);
+  const skillDir = dirname(skillPath);
+  await fs.mkdir(skillDir, { recursive: true });
+  await fs.writeFile(skillPath, getSkillContent(), 'utf-8');
+}
+
+/**
+ * Update existing SKILL.md files
+ */
+export async function updateExistingSkillFiles(repoRoot: string): Promise<void> {
+  const enabledAgents = await getEnabledAgents(repoRoot);
+  const content = getSkillContent();
+
+  for (const agent of enabledAgents) {
+    const skillPath = join(repoRoot, agent.path);
+    await fs.writeFile(skillPath, content, 'utf-8');
+  }
+}
+
+/**
+ * Create a single SKILL.md file (backward compatibility)
  */
 export async function createSkillFile(repoRoot: string): Promise<void> {
-  const skillDir = join(repoRoot, 'skills', 'gitspect');
-  await fs.mkdir(skillDir, { recursive: true });
-
-  const content = getSkillContent();
-  const skillPath = join(repoRoot, SKILL_PATH);
-  await fs.writeFile(skillPath, content, 'utf-8');
+  await createDefaultSkillFile(repoRoot);
 }
 
 /**

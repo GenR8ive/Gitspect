@@ -1,5 +1,5 @@
 import * as readline from 'readline';
-import { shouldPromptAboutSkill, createSkillFile, setSkillPromptNever, markSessionAsked, resetSessionState } from './skill-manager.js';
+import { shouldPromptAboutSkill, createDefaultSkillFile, updateExistingSkillFiles, setSkillPromptNever, markSessionAsked, resetSessionState, getEnabledAgents } from './skill-manager.js';
 
 /**
  * Prompt user for yes/no input
@@ -43,27 +43,37 @@ export async function withSkillCheck(
   if (!check.exists) {
     console.log('\x1b[90m%s\x1b[0m', 'ℹ  No SKILL.md found. Create it so AI agents can use Gitspect automatically? [Y/n]');
 
-    const answer = await promptUser('');
+    const answer = await promptUser('  ');
 
     if (answer) {
-      await createSkillFile(repoRoot);
-      console.log('  ✓ Created skills/gitspect/SKILL.md\n');
+      await createDefaultSkillFile(repoRoot);
+      console.log('  ✓ Created .agents/skills/gitspect/SKILL.md\n');
     } else {
       // Set skillPrompt to never so we don't ask again
       await setSkillPromptNever(repoRoot);
       console.log('  ✗ Skipped. Added "skillPrompt": "never" to .gitspectrc\n');
     }
   } else if (check.isStale) {
+    const enabledAgents = await getEnabledAgents(repoRoot);
+    const agentList = enabledAgents.map(a => `    • ${a.name}`).join('\n');
+
     console.log(
       `\x1b[33m%s\x1b[0m`,
-      `⚠  skills/gitspect/SKILL.md is outdated (v${check.currentVersion} → v0.1.0)\n   Update it? [Y/n]`
+      `⚠  SKILL.md is outdated (v${check.currentVersion} → v0.1.0)\n   Update it? [Y/n]`
     );
+
+    if (enabledAgents.length > 0) {
+      console.log(`\x1b[90mWill update:\n${agentList}\x1b[0m\n`);
+    }
 
     const answer = await promptUser('');
 
     if (answer) {
-      await createSkillFile(repoRoot);
-      console.log('  ✓ Updated skills/gitspect/SKILL.md\n');
+      await updateExistingSkillFiles(repoRoot);
+      for (const agent of enabledAgents) {
+        console.log(`  ✓ Updated ${agent.path}`);
+      }
+      console.log('');
     } else {
       console.log('  ✗ Skipped. Update it later with \`gitspect init\`\n');
     }

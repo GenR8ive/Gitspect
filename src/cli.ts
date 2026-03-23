@@ -80,18 +80,20 @@ program
   .command('blame-map')
   .description('File ownership mapping - see who owns which files')
   .option('--days <number>', 'Time period in days (default: all time)')
+  .option('--file <paths>', 'Filter to specific file paths (comma-separated)')
   .option('--current-branch', 'Only analyze the current branch (default: all branches)')
   .option('--no-ignore', 'Include files that would normally be filtered (lock files, build artifacts, etc.)')
   .option('--json', 'Output as JSON')
   .action(wrapCommand(async (options) => {
     const days = options.days ? parseInt(options.days, 10) : undefined;
-    await blameMapCommand({ days, currentBranch: options.currentBranch, json: options.json, noIgnore: options.noIgnore });
+    await blameMapCommand({ days, file: options.file, currentBranch: options.currentBranch, json: options.json, noIgnore: options.noIgnore });
   }));
 
 program
   .command('scars')
   .description('Riskiest files to modify - high-churn, bug-prone areas')
   .option('--days <number>', 'Time period in days (default: all time)')
+  .option('--file <path>', 'Filter to a specific file path')
   .option('--limit <number>', 'Maximum number of files to display')
   .option('--current-branch', 'Only analyze the current branch (default: all branches)')
   .option('--no-ignore', 'Include files that would normally be filtered (lock files, build artifacts, etc.)')
@@ -99,7 +101,7 @@ program
   .action(wrapCommand(async (options) => {
     const days = options.days ? parseInt(options.days, 10) : undefined;
     const limit = options.limit ? parseInt(options.limit, 10) : undefined;
-    await scarsCommand({ days, limit, currentBranch: options.currentBranch, json: options.json, noIgnore: options.noIgnore });
+    await scarsCommand({ days, file: options.file, limit, currentBranch: options.currentBranch, json: options.json, noIgnore: options.noIgnore });
   }));
 
 program

@@ -114,6 +114,13 @@ export interface ChurnOptions extends BaseOptions {
 }
 
 /**
+ * Blame-map command options
+ */
+export interface BlameMapOptions extends BaseOptions {
+  file?: string; // Filter to specific file paths (comma-separated)
+}
+
+/**
  * File ownership metrics
  */
 export interface FileOwnership {
@@ -155,6 +162,7 @@ export interface FileCoupling {
  */
 export interface LimitedOptions extends BaseOptions {
   limit?: number;
+  file?: string; // Filter to a specific file path
 }
 
 // ============================================================================

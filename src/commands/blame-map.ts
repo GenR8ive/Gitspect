@@ -1,12 +1,12 @@
 import { createGitParser } from '../core/git-parser.js';
 import { calculateFileOwnership } from '../core/metrics.js';
 import { formatBlameMap, formatJSON } from '../core/formatters.js';
-import { BaseOptions } from '../types.js';
+import { BlameMapOptions } from '../types.js';
 
 /**
  * Execute the blame-map command
  */
-export async function blameMapCommand(options: BaseOptions): Promise<void> {
+export async function blameMapCommand(options: BlameMapOptions): Promise<void> {
   try {
     // Parse git history
     const gitParser = await createGitParser();
@@ -27,11 +27,24 @@ export async function blameMapCommand(options: BaseOptions): Promise<void> {
     // Calculate file ownership
     const ownerships = calculateFileOwnership(commits);
 
+    // Filter by specific file(s) if requested
+    let filteredOwnerships = ownerships;
+    if (options.file) {
+      const filePaths = options.file.split(',').map(f => f.trim());
+      filteredOwnerships = ownerships.filter(o =>
+        filePaths.some(fp => o.path === fp || o.path.endsWith('/' + fp))
+      );
+      if (filteredOwnerships.length === 0) {
+        console.log(`No ownership data found for file(s): ${options.file}`);
+        return;
+      }
+    }
+
     // Format and display
     if (options.json) {
-      console.log(formatJSON(ownerships));
+      console.log(formatJSON(filteredOwnerships));
     } else {
-      console.log(formatBlameMap(ownerships, options.days));
+      console.log(formatBlameMap(filteredOwnerships, options.days));
     }
   } catch (error) {
     if (error instanceof Error) {

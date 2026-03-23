@@ -338,29 +338,62 @@ Pick the **minimum** set of commands that answers the user's question.
 
 | User intent | Command to run |
 |---|---|
-| "Why did we change this file / do this?" | \`gitspect reflect --days 90\` |
-| "Is it safe to touch this file?" | \`gitspect scars --limit 10\` |
-| "Who should I talk to about X?" | \`gitspect blame-map <file>\` |
-| "What files change together with this one?" | \`gitspect couples --limit 10\` |
-| Writing a commit message | \`gitspect reflect --days 30 --current-branch\` |
-| Writing a PR description | \`gitspect couples --limit 10\` + \`gitspect blame-map <changed files>\` |
-| Reviewing someone else's PR | \`gitspect scars\` on changed files + \`gitspect blame-map\` for reviewers |
-| "What's the health of this project?" | \`gitspect report --days 90\` |
-| Burnout / contributor check | \`gitspect heatmap --days 90\` |
-| General onboarding / "what should I know?" | \`gitspect context --days 90\` |
+| "Why did we change this file / do this?" | \`gitspect reflect --days 90 --json\` |
+| "Is it safe to touch this file?" | \`gitspect scars --file <path> --json\` |
+| "What are the riskiest files?" | \`gitspect scars --limit 10 --json\` |
+| "Who should I talk to about X?" | \`gitspect blame-map --file <path> --json\` |
+| "What files change together with this one?" | \`gitspect couples --limit 10 --json\` |
+| Writing a commit message | \`gitspect reflect --days 30 --current-branch --json\` |
+| Writing a PR description | \`gitspect couples --limit 10 --json\` + \`gitspect blame-map --json\` |
+| Reviewing someone else's PR | \`gitspect scars --json\` on changed files + \`gitspect blame-map --json\` |
+| "What's the health of this project?" | \`gitspect report --days 90 --json\` |
+| Burnout / contributor check | \`gitspect heatmap --days 90 --json\` |
+| General onboarding / "what should I know?" | \`gitspect context --days 90 --json\` |
 
 **Default to \`--days 90\`** — good signal-to-noise for most repos.
-Use \`--json\` when you need to parse the output programmatically.
+**ALWAYS use \`--json\`** — required for AI parsing.
 
 ## Running commands
 
 \`\`\`bash
 # No install needed
-npx gitspect <command> [flags]
+npx gitspect <command> [flags] --json
 
 # Or if globally installed
-gitspect <command> [flags]
+gitspect <command> [flags] --json
 \`\`\`
+
+## Key flags
+
+| Flag | Use when | AI Note |
+|---|---|---|
+| \`--days <n>\` | Scoping the time window (default: all time — prefer \`--days 90\`) | Use 30 for recent changes, 90 for patterns, 365 for long-term trends |
+| \`--current-branch\` | User is asking about their own branch specifically | Use when the user mentions "my changes" or "this branch" |
+| \`--limit <n>\` | Reducing output for \`churn\`, \`scars\`, \`couples\` | Start with 10-20 for focused results |
+| \`--file <path>\` | Analyzing specific files (scars, blame-map) | Use comma for multiple: \`--file a.ts,b.ts\` |
+| \`--json\` | **ALWAYS REQUIRED** | Without this, output is unparseable by AI |
+| \`--no-ignore\` | User specifically wants lock files / build artifacts included | Rarely needed |
+
+### Special: --file flag for targeted analysis
+
+When the user asks about a specific file (e.g., "Is this file risky?", "Who owns this file?", "Should I refactor this?"), use the \`--file\` flag:
+
+\`\`\`bash
+# Check risk level of a specific file before suggesting changes
+npx gitspect scars --file src/components/Button.tsx --json
+
+# Check who owns a specific file
+npx gitspect blame-map --file src/components/Button.tsx --json
+
+# Check multiple files at once (comma-separated)
+npx gitspect blame-map --file src/components/Button.tsx,src/hooks/useAuth.ts --json
+npx gitspect scars --file src/components/Button.tsx,src/hooks/useAuth.ts --json
+\`\`\`
+
+This is the recommended workflow when AI is about to suggest edits to a file:
+1. Run \`gitspect scars --file <path> --json\` to check risk
+2. If riskScore > 50, warn the user and suggest consulting the owner
+3. Proceed with changes only after user acknowledges the risk
 
 ## How to interpret output and what to do with it
 
@@ -369,36 +402,47 @@ gitspect <command> [flags]
 - **Strong file coupling** (\`couples\`): Hidden dependency — mention it and suggest the user check those coupled files too.
 - **Night/weekend commits** (\`heatmap\`): Possible burnout — mention it gently if relevant.
 - **Owner identified** (\`blame-map\`): Suggest the user loop them in.
+- **Risk score > 50** (\`scars\`): Proceed with caution — recommend tests and code review.
 
 ## Commit message workflow
 
 When the user wants to commit or needs a summary of recent changes:
 
-1. Run \`gitspect reflect --days 30 --current-branch\`
-2. Use the output to write a meaningful commit message that reflects *why* the changes happened, not just *what* changed.
-3. If the changed files show high churn or bugs in \`scars\`, note that in the PR description.
+1. Run \`gitspect reflect --days 30 --current-branch --json\`
+2. Parse the JSON output to understand what changed
+3. Use the output to write a meaningful commit message that reflects *why* the changes happened, not just *what* changed.
+4. If the changed files show high churn or bugs in \`scars\`, note that in the commit message.
 
 ## PR description workflow
 
-1. Run \`gitspect blame-map <changed files>\` → suggest reviewers
-2. Run \`gitspect couples --limit 10\` → flag any coupled files not in the PR
-3. Draft the PR description using the context from both commands
+1. Run \`gitspect blame-map --file <changed-files> --json\` → suggest reviewers
+2. Run \`gitspect couples --limit 10 --json\` → flag any coupled files not in the PR
+3. Run \`gitspect scars --file <changed-files> --json\` → flag risky files
+4. Draft the PR description using the parsed JSON context from all commands
 
-## Key flags
+## Pre-edit checklist
 
-| Flag | Use when |
-|---|---|
-| \`--days <n>\` | Scoping the time window (default: all time — prefer \`--days 90\`) |
-| \`--current-branch\` | User is asking about their own branch specifically |
-| \`--limit <n>\` | Reducing output for \`churn\`, \`scars\`, \`couples\` |
-| \`--json\` | You need to process output in code |
-| \`--no-ignore\` | User specifically wants lock files / build artifacts included |
+Before suggesting edits to any file, run:
+
+\`\`\`bash
+# Check risk level
+npx gitspect scars --file <file-path> --json
+
+# Check who owns it (for consultation/PR review)
+npx gitspect blame-map --file <file-path> --json
+\`\`\`
+
+If \`riskLevel\` is "HIGH" or "CRITICAL", or \`riskScore\` > 50:
+- Warn the user about the risk
+- Mention why it's risky (high churn, bugfix rate, etc.)
+- Suggest adding tests or consulting the owner (from blame-map output)
+- Ask for confirmation before proceeding
 
 ## Important: don't over-run
 
 Run **only what's needed**. One targeted command is almost always enough.
 Only combine two commands if the user's question genuinely requires both perspectives
-(e.g., PR review needs both \`blame-map\` for reviewers AND \`couples\` for hidden deps).
+(e.g., PR review needs both \`blame-map --json\` for reviewers AND \`couples --json\` for hidden deps).
 Never run \`context\`, \`reflect\`, \`scars\`, \`couples\`, \`heatmap\`, and \`report\` all at once.
 `;
 }

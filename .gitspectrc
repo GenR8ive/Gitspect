@@ -5,5 +5,5 @@
     "docs/"
   ],
   "include": [],
-  "skillPrompt": "auto"
+  "skillPrompt": "never"
 }

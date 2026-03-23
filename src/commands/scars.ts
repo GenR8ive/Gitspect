@@ -27,9 +27,19 @@ export async function scarsCommand(options: LimitedOptions): Promise<void> {
     // Calculate file risk
     const risks = calculateFileRisk(commits);
 
+    // Filter by specific file if requested
+    let filteredRisks = risks;
+    if (options.file) {
+      filteredRisks = risks.filter(r => r.path === options.file || r.path.endsWith('/' + options.file));
+      if (filteredRisks.length === 0) {
+        console.log(`No risk data found for file: ${options.file}`);
+        return;
+      }
+    }
+
     // Apply limit if specified
-    const limit = options.limit ?? risks.length;
-    const displayRisks = risks.slice(0, limit);
+    const limit = options.limit ?? filteredRisks.length;
+    const displayRisks = filteredRisks.slice(0, limit);
 
     // Format and display
     if (options.json) {

@@ -1,6 +1,6 @@
 {
   "name": "gitspect",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Git history analysis for AI workflows - discover risk, ownership, and evolution patterns in your codebase",
   "type": "module",
   "main": "./dist/cli.js",

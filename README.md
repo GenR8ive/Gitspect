@@ -95,9 +95,13 @@ For understanding codebase ownership and risk areas.
 | `gitspect scars` | Riskiest files to modify - high-churn, bug-prone areas |
 | `gitspect couples` | Files changed together - discover hidden dependencies |
 
-**Example:**
+**Examples:**
 ```bash
+# Show top 10 riskiest files
 gitspect scars --limit 10
+
+# Check risk level of a specific file (great for AI context)
+gitspect scars --file src/components/Button.tsx --json
 ```
 
 ### Phase 3: Project Management
@@ -138,10 +142,13 @@ All commands support these options:
 |--------|-------------|
 | `--days <n>` | Time period in days (default: all time, all branches) |
 | `--current-branch` | Only analyze the current branch (default: all branches) |
-| `--json` | Output as JSON (for AI consumption) |
+| `--json` | Output as JSON (recommended for AI consumption) |
 | `--no-ignore` | Include files that would normally be filtered (lock files, build artifacts, etc.) |
 | `--limit <n>` | Limit output to top N results (churn, scars, couples) |
+| `--file <path>` | Filter analysis to a specific file (scars command) |
 | `--granularity <week\|month>` | Time granularity for evolution command |
+
+> **Tip for AI workflows:** Use the `--json` flag to get clean, machine-readable output. Without it, the output includes colors, tables, and formatting that AI tools may not parse correctly.
 
 ---
 
@@ -201,6 +208,8 @@ The `SKILL.md` includes:
 - `skillPrompt: "never"` - Disables SKILL.md management
 
 ### For AI Agents
+
+> **Important:** Always use the `--json` flag when providing output to AI assistants. Without it, the output contains ANSI colors, table formatting, and text wrapping that AI tools cannot parse correctly.
 
 Run `gitspect context --json` to get a comprehensive repo overview:
 

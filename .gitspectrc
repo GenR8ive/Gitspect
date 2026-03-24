@@ -1,9 +1,0 @@
-{
-  "exclude": [
-    "tests/fixtures/",
-    "*.mock.ts",
-    "docs/"
-  ],
-  "include": [],
-  "skillPrompt": "never"
-}

@@ -322,7 +322,8 @@ description: >
   debugging a frequently broken file, or any "what should I know before
   changing X?" question. Also trigger when the user asks about contributor
   patterns, team burnout, or project health. Always invoke BEFORE suggesting
-  changes to unfamiliar files. Run only the one or two commands that answer
+  changes to unfamiliar files. Use gitspect stage --summary --json for commit
+  messages to save tokens. Run only the one or two commands that answer
   the specific question — never run all commands.
 ---
 
@@ -343,7 +344,7 @@ Pick the **minimum** set of commands that answers the user's question.
 | "What are the riskiest files?" | \`gitspect scars --limit 10 --json\` |
 | "Who should I talk to about X?" | \`gitspect blame-map --file <path> --json\` |
 | "What files change together with this one?" | \`gitspect couples --limit 10 --json\` |
-| Writing a commit message | \`gitspect reflect --days 30 --current-branch --json\` |
+| Writing a commit message | \`gitspect stage --summary\` (staged) or \`gitspect reflect --days 30 --current-branch --json\` |
 | Writing a PR description | \`gitspect couples --limit 10 --json\` + \`gitspect blame-map --json\` |
 | Reviewing someone else's PR | \`gitspect scars --json\` on changed files + \`gitspect blame-map --json\` |
 | "What's the health of this project?" | \`gitspect report --days 90 --json\` |
@@ -408,10 +409,11 @@ This is the recommended workflow when AI is about to suggest edits to a file:
 
 When the user wants to commit or needs a summary of recent changes:
 
-1. Run \`gitspect reflect --days 30 --current-branch --json\`
-2. Parse the JSON output to understand what changed
-3. Use the output to write a meaningful commit message that reflects *why* the changes happened, not just *what* changed.
-4. If the changed files show high churn or bugs in \`scars\`, note that in the commit message.
+1. Run \`gitspect stage --summary\` for staged changes (token-efficient)
+2. For branch-wide context: \`gitspect reflect --days 30 --current-branch --json\`
+3. Parse the output to understand what changed
+4. Write a meaningful commit message that reflects *why* the changes happened, not just *what* changed.
+5. If the changed files show high churn or bugs in \`scars\`, note that in the commit message.
 
 ## PR description workflow
 

@@ -13,6 +13,7 @@ import { report as reportCommand } from './commands/report.js';
 import { blockers as blockersCommand } from './commands/blockers.js';
 import { evolution as evolutionCommand } from './commands/evolution.js';
 import { context as contextCommand } from './commands/context.js';
+import { stageCommand } from './commands/stage.js';
 
 const program = new Command();
 const repoRoot = process.cwd();
@@ -168,6 +169,16 @@ program
     const days = options.days ? parseInt(options.days, 10) : undefined;
     await contextCommand({ days, currentBranch: options.currentBranch, json: options.json, noIgnore: options.noIgnore });
   }));
+
+// Stage context for AI commit message generation
+program
+  .command('stage')
+  .description('Staged changes summary - concise context for AI commit message generation')
+  .option('--summary', 'Ultra-compact output format')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    await stageCommand({ json: options.json, summary: options.summary });
+  });
 
 program.parseAsync().catch((error) => {
   console.error(error);
